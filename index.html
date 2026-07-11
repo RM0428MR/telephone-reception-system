@@ -473,7 +473,9 @@ function extract(segments, baseDate) {
   const customer = segments.filter(function(segment) { return segment.role === "customer"; }).map(function(segment) { return segment.text; }).join("\n");
   const all = segments.map(function(segment) { return segment.text; }).join("\n");
   const base = customer || all;
-  const phoneRaw = firstMatch(/0\d{1,3}[-ー\s]?\d{2,4}[-ー\s]?\d{3,4}/, all);
+  // 「0 9 0の33 44…」のような数字間スペース割れを潰してから、区切り「の」も許可して検索
+  const phoneSearchText = all.replace(/(\d)[ 　]+(?=\d)/g, "$1");
+  const phoneRaw = firstMatch(/0\d{1,3}[-ーの\s]?\d{2,4}[-ーの\s]?\d{3,4}/, phoneSearchText);
   const dateParts = [];
   const explicitDate = all.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
   if (explicitDate) dateParts.push(explicitDate[0]);
@@ -523,11 +525,26 @@ function extract(segments, baseDate) {
   else if (companionMatch) companions = companionMatch[1] + " " + companionMatch[2] + "名";
   else if (findPositiveKeywords(base, ["付き添い", "付添", "同乗", "一緒に"]).length) companions = "あり（人数未確認）";
   const explicitNamePattern = /([一-龯ァ-ヶ]{2,8})\s*(?:と申します|と言います|といいます|と申し)/;
-  const conversationalNamePattern = /(?:^|[。\n])\s*([一-龯ァ-ヶ]{2,8})\s*です(?:けれども|けど|が)/;
+  const conversationalNamePattern = /(?:^|[。\n])\s*([一-龯ァ-ヶ]{2,8})\s*です(?:けれども|けど|が)?/;
+  // 担当者の復唱「〇〇様」/ 第三者依頼の「〇〇さん」からの氏名候補（一般語は除外）
+  const staff = segments.filter(function(segment) { return segment.role === "staff"; }).map(function(segment) { return segment.text; }).join("\n");
+  const NOT_NAME_WORDS = ["利用者", "患者", "お客", "皆", "本人", "家族", "奥", "旦那", "お母", "お父", "母親", "父親", "先生", "看護", "師長", "神", "お疲れ", "御中", "みな"];
+  function nameCandidate(pattern, text) {
+    const globalPattern = new RegExp(pattern.source, "g");
+    let match;
+    while ((match = globalPattern.exec(text)) !== null) {
+      const candidate = match[1];
+      if (!NOT_NAME_WORDS.some(function(word) { return candidate.includes(word); })) return candidate;
+    }
+    return null;
+  }
   const nameMatch = customer.match(explicitNamePattern) || customer.match(conversationalNamePattern) || all.match(explicitNamePattern);
+  const customerName = (nameMatch ? nameMatch[1] : null)
+    || nameCandidate(/([一-龯ぁ-んァ-ヶA-Za-z]{1,8})\s*(?:様|さま)/, staff || all)
+    || nameCandidate(/([一-龯ぁ-んァ-ヶ]{2,8})\s*さん/, base);
   return {
-    customer_name: nameMatch ? nameMatch[1] : null,
-    phone: phoneRaw ? phoneRaw.replace(/\s/g, "").replace(/ー/g, "-") : null,
+    customer_name: customerName,
+    phone: phoneRaw ? phoneRaw.replace(/\s/g, "").replace(/ー/g, "-").replace(/の/g, "-") : null,
     ride_date: rideDateValue,
     ride_time: normalizeTime(timeRaw),
     pickup: pickup,
