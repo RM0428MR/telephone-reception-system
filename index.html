@@ -328,7 +328,7 @@ const BACKUP_KEY = "caretaxi_last_backup";
 const AID = ["車いす", "車椅子", "ストレッチャー", "歩行器", "杖", "手すり", "リクライニング", "酸素", "寝台", "階段"];
 const AID_TYPE = ["車いす", "車椅子", "ストレッチャー", "リクライニング", "歩行器", "杖", "寝台"];
 const ROUND = ["往復", "帰りも", "待機", "お迎えも", "行き帰り"];
-const ONEWAY = ["片道"];
+const ONEWAY = ["片道", "行きだけ", "帰りだけ", "送りだけ", "迎えだけ"];
 const PLACES = ["病院", "クリニック", "医院", "診療所", "センター", "施設", "自宅", "デイサービス", "老健", "特養", "ホーム", "駅", "整形外科", "内科"];
 const FACILITY = ["施設", "老健", "特養", "ホーム", "デイサービス", "デイ", "グループホーム"];
 const HOME = ["自宅", "家", "うち"];
@@ -379,6 +379,16 @@ function normalizeDate(value, baseDate) {
     if (target < base) target = new Date(year + 1, Number(explicit[1]) - 1, Number(explicit[2]));
     return localISODate(target);
   }
+  // 月なしの「18日」形式: 今月のその日、過ぎていれば翌月と解釈
+  const bareDay = raw.match(/(\d{1,2})\s*日/);
+  if (bareDay) {
+    const day = Number(bareDay[1]);
+    if (day >= 1 && day <= 31) {
+      let bareTarget = new Date(base.getFullYear(), base.getMonth(), day);
+      if (bareTarget < base) bareTarget = new Date(base.getFullYear(), base.getMonth() + 1, day);
+      return localISODate(bareTarget);
+    }
+  }
   if (/明後日|あさって/.test(raw)) { target = new Date(base); target.setDate(target.getDate() + 2); return localISODate(target); }
   if (/明日|あした/.test(raw)) { target = new Date(base); target.setDate(target.getDate() + 1); return localISODate(target); }
   if (/今日|本日/.test(raw)) return localISODate(base);
@@ -405,14 +415,16 @@ function normalizeTime(value) {
     const minute = Number(colon[2]);
     if (hour <= 23 && minute <= 59) return pad(hour) + ":" + pad(minute);
   }
-  const japanese = raw.match(/(午前|午後)?\s*(\d{1,2})\s*時\s*(半|\d{1,2}\s*分)?/);
+  const japanese = raw.match(/(午前|午後|朝|お昼|昼|夕方|夜|晩)?\s*の?\s*(\d{1,2})\s*時(?!間)\s*(半|\d{1,2}\s*分)?/);
   if (!japanese) return null;
   let hour = Number(japanese[2]);
   let minute = 0;
   if (japanese[3] && /半/.test(japanese[3])) minute = 30;
   else if (japanese[3]) minute = Number((japanese[3].match(/\d+/) || ["0"])[0]);
-  if (japanese[1] === "午後" && hour < 12) hour += 12;
-  if (japanese[1] === "午前" && hour === 12) hour = 0;
+  const marker = japanese[1] || "";
+  if ((marker === "午後" || marker === "夕方" || marker === "夜" || marker === "晩") && hour < 12) hour += 12;
+  else if ((marker === "昼" || marker === "お昼") && hour >= 1 && hour <= 5) hour += 12;
+  if (marker === "午前" && hour === 12) hour = 0;
   if (hour > 23 || minute > 59) return null;
   return pad(hour) + ":" + pad(minute);
 }
@@ -469,24 +481,135 @@ function phraseBefore(text, particles) {
   return best ? best[1] : null;
 }
 function firstMatch(regexp, text) { const match = text.match(regexp); return match ? match[0].trim() : null; }
+// --- 乗車時刻の選択: 全時刻表現を文脈スコアで比較する ---
+// 「11時から診察なので10時15分に来てほしい」→ 迎え時刻(10:15)を優先。
+// 「帰りは16時に」のような復路時刻や「N時から」(開始時刻)は減点。
+function pickRideTime(text) {
+  const timeRe = /(\d{1,2})\s*[:：]\s*(\d{2})|(?:午前|午後|朝|お昼|昼|夕方|夜|晩)?\s*の?\s*(\d{1,2})\s*時(?!間)\s*(?:半|\d{1,2}\s*分)?/g;
+  let best = null;
+  let bestScore = -1;
+  let match;
+  while ((match = timeRe.exec(text)) !== null) {
+    const raw = match[0].trim();
+    if (!raw || !/\d/.test(raw)) continue;
+    const before = text.slice(Math.max(0, match.index - 8), match.index);
+    const after = text.slice(match.index + match[0].length, match.index + match[0].length + 12);
+    let score = 1;
+    if (/(?:帰り|お帰り|戻り)[^。\n]{0,6}$/.test(before)) score = 0;      // 復路の時刻
+    else if (/^\s*から/.test(after)) score = 0;                             // 「N時から診察」= 開始時刻
+    else if (/来て|お迎え|迎えに|お願い|出発|家を出|出たい|乗り/.test(after)) score = 2; // 迎え依頼の時刻
+    if (score > bestScore) { bestScore = score; best = raw; }
+  }
+  return best;
+}
+// 注: 「が」は固有名詞に頻出(「旭が丘」「がんセンター」)のため分割しない
+const ROUTE_SPLIT_STRICT = /から|まで|、|。|\s|を|に|は|で|も|へ|様|時|分/;
+const ROUTE_TOKEN_STOP = ["それ", "これ", "どこ", "ところ", "いつ", "なん"];
+function collectRoutes(text) {
+  const pickups = [];
+  const dropoffs = [];
+  const particleRe = /(から|まで|へ)/g;
+  let match;
+  while ((match = particleRe.exec(text)) !== null) {
+    const index = match.index;
+    const fragment = text.slice(Math.max(0, index - 18), index);
+    const parts = fragment.split(ROUTE_SPLIT_STRICT);
+    const token = parts[parts.length - 1].trim();
+    if (!token || (token.length < 2 && !["家", "駅"].includes(token))) continue;
+    if (ROUTE_TOKEN_STOP.includes(token) || /(?:です|ます|でし|まし|した|たら|ので|んだ|ください|て|った)$/.test(token)) continue;
+    const following = text.slice(index + match[0].length, index + match[0].length + 6);
+    if (match[0] === "から") pickups.push(token);
+    else if (/^\s*(?:来て|きて|お迎え|迎え|伺い|うかがい|お願いに)/.test(following)) pickups.push(token); // 「家まで来て」= 乗車地
+    else dropoffs.push(token);
+  }
+  return { pickups: pickups, dropoffs: dropoffs };
+}
+// --- 固有名の医療機関抽出（「病院」単体ではなく「中央病院」を取る） ---
+// 貪欲に捕捉してから正規化パイプラインで整える方式。
+// 「けやき台」「やまと台」等の固有名内ひらがな(や/と/が)を切断しないため、
+// 助詞での機械分割はせず、(1)から/まで切断 (2)途中サフィックス切断 (3)先頭junk除去 (4)裸サフィックス棄却 を順に適用。
+const MED_SUFFIXES = ["病院", "クリニック", "医院", "診療所", "がんセンター", "医療センター", "眼科", "整形外科", "内科", "外科", "皮膚科", "歯科", "耳鼻科", "産婦人科"];
+function normalizeMedicalName(raw) {
+  let name = raw.split(/から|まで/).pop();
+  // 「病院とやまと台クリニック」→ 先行施設名ごと飲み込んだ場合は後段だけ残す。
+  // 「と|や|が」除去は切断が起きた時のみ（「やまと台クリニック」の頭を削らないため）
+  const afterMidCut = name.replace(/^[\s\S]*?(?:病院|クリニック|医院|診療所|センター)(?=[\s\S])/, "");
+  if (afterMidCut !== name) name = afterMidCut.replace(/^(?:と|や|が|の|に|、|。|\s)+/, "");
+  // 先頭の日時語・助詞を除去（「来週の月曜に病院」→「病院」）
+  name = name.replace(/^(?:来週|今週|再来週|明日|明後日|今日|本日|毎週|朝|お昼|昼|夕方|夜|晩|月曜|火曜|水曜|木曜|金曜|土曜|日曜|[0-9０-９]{1,2}(?:時|分|日|月)?|の|に|は|を|へ|で|、|。|\s)+/, "");
+  if (!name || MED_SUFFIXES.includes(name)) return null; // 裸の「病院」等は固有名ではない
+  if (/[0-9０-９]|時|分|曜|です|ます/.test(name)) return null; // junk残留は不採用
+  return name;
+}
+function findNamedMedical(text) {
+  const namedRe = /(?:^|[のはをにへでもやとが、。！？\s]|から|まで)([一-龯ぁ-んァ-ヶA-Za-z0-9ー]{1,20}(?:病院|クリニック|医院|診療所|がんセンター|医療センター|眼科|整形外科|内科|外科|皮膚科|歯科|耳鼻科|産婦人科))/g;
+  const results = [];
+  let match;
+  while ((match = namedRe.exec(text)) !== null) {
+    const name = normalizeMedicalName(match[1]);
+    if (name) results.push(name);
+  }
+  return results;
+}
+// --- 氏名候補ヘルパー ---
+const NOT_NAME_WORDS = ["利用者", "入居者", "入所者", "患者", "お客", "客", "皆", "本人", "家族", "奥", "旦那", "息子", "娘", "母", "父",
+  "先生", "看護", "師長", "相談員", "ケアマネ", "運転手", "様子", "お疲れ", "御中",
+  "大丈夫", "自宅", "病院", "クリニック", "医院", "外科", "内科", "眼科", "薬局", "施設", "スーパー",
+  "往復", "片道", "予約", "車椅子", "車いす", "無理", "結構", "平気", "今日", "明日", "明後日", "本日", "来週", "再来週"];
+function isNameCandidate(value) { return Boolean(value) && !NOT_NAME_WORDS.some(function(word) { return value.includes(word); }); }
+function lastHonorificCandidate(text) {
+  // 担当者の復唱「〇〇様」— 最後の復唱(確認読み上げ)が最も確度が高い
+  const honorificRe = /([一-龯ァ-ヶA-Za-z]{1,8})\s*様(?![子々])/g;
+  let match;
+  let found = null;
+  while ((match = honorificRe.exec(text)) !== null) { if (isNameCandidate(match[1])) found = match[1]; }
+  return found;
+}
+function firstSanCandidate(text) {
+  const sanRe = /([一-龯ァ-ヶ]{2,8})\s*さん/g;
+  let match;
+  while ((match = sanRe.exec(text)) !== null) { if (isNameCandidate(match[1])) return match[1]; }
+  return null;
+}
 function extract(segments, baseDate) {
   const customer = segments.filter(function(segment) { return segment.role === "customer"; }).map(function(segment) { return segment.text; }).join("\n");
   const all = segments.map(function(segment) { return segment.text; }).join("\n");
   const base = customer || all;
-  // 「0 9 0の33 44…」のような数字間スペース割れを潰してから、区切り「の」も許可して検索
+  // 「0 9 0の33 44…」のような数字間スペース割れを潰してから、区切り「の」「、」も許可して検索
   const phoneSearchText = all.replace(/(\d)[ 　]+(?=\d)/g, "$1");
-  const phoneRaw = firstMatch(/0\d{1,3}[-ーの\s]?\d{2,4}[-ーの\s]?\d{3,4}/, phoneSearchText);
+  const phoneRaw = firstMatch(/0\d{1,3}[-ーの、\s]?\d{2,4}[-ーの、\s]?\d{3,4}/, phoneSearchText);
   const dateParts = [];
   const explicitDate = all.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
   if (explicitDate) dateParts.push(explicitDate[0]);
+  else {
+    // 月なしの「18日」形式(電話で頻出)。「3日間」「日曜」等は除外
+    const bareDayMatch = all.match(/(\d{1,2})\s*日(?![数間曜])/);
+    if (bareDayMatch && Number(bareDayMatch[1]) >= 1 && Number(bareDayMatch[1]) <= 31) dateParts.push(bareDayMatch[0]);
+  }
   const relativeDate = all.match(/(今日|本日|明日|あした|明後日|あさって|今週|来週|再来週)/);
   if (relativeDate) dateParts.push(relativeDate[0]);
   const weekday = all.match(/([月火水木金土日])\s*曜/);
   if (weekday) dateParts.push(weekday[1] + "曜");
   const rideDateValue = normalizeDate(dateParts.join(" "), baseDate);
-  const timeRaw = firstMatch(/(\d{1,2})\s*[:：]\s*(\d{2})/, all) || firstMatch(/(午前|午後)?\s*(\d{1,2})\s*時\s*(半|\d{1,2}\s*分)?/, all);
-  let pickup = phraseBefore(base, ["から"]);
-  let dropoff = phraseBefore(base, ["まで", "へ"]);
+  const timeRaw = pickRideTime(all);
+  // 経路: 顧客発話を優先し、無ければ担当者の復唱(「XからYまで承りました」)から拾う
+  const staffText = segments.filter(function(segment) { return segment.role === "staff"; }).map(function(segment) { return segment.text; }).join("\n");
+  const customerRoutes = collectRoutes(customer);
+  const staffRoutes = collectRoutes(staffText);
+  const GENERIC_DROPOFF = ["病院", "クリニック", "医院", "診療所", "眼科", "内科", "外科", "整形外科", "皮膚科", "スーパー", "薬局", "施設", "デイサービス", "センター"];
+  const GENERIC_PICKUP = ["家", "自宅", "うち", "ご自宅", "施設"];
+  const statedDestination = base.match(/行き先は\s*([^。\n、]{2,20}?)(?:です|まで|へ|に|。|$)/);
+  let pickup = customerRoutes.pickups[0] || staffRoutes.pickups[0] || null;
+  let dropoff = (statedDestination ? statedDestination[1].trim() : null) || customerRoutes.dropoffs[0] || staffRoutes.dropoffs[0] || null;
+  // 総称語(「病院」「スーパー」等)しか取れていなければ、より具体的な言及に置き換える
+  if (dropoff && GENERIC_DROPOFF.includes(dropoff)) {
+    const specificDropoff = customerRoutes.dropoffs.concat(staffRoutes.dropoffs).find(function(candidate) { return candidate.length > dropoff.length; });
+    if (specificDropoff) dropoff = specificDropoff;
+  }
+  if (pickup && GENERIC_PICKUP.includes(pickup)) {
+    const specificPickup = customerRoutes.pickups.concat(staffRoutes.pickups).find(function(candidate) { return candidate.length > pickup.length; });
+    if (specificPickup) pickup = specificPickup;
+  }
   if (!pickup || !dropoff) {
     const orderedPlaces = PLACES.filter(function(place) { return base.includes(place); }).sort(function(a, b) { return base.indexOf(a) - base.indexOf(b); });
     if (!pickup && orderedPlaces[0]) pickup = orderedPlaces[0];
@@ -496,22 +619,30 @@ function extract(segments, baseDate) {
   let destinationType = null;
   if (findKeywords(destinationText, FACILITY).length) destinationType = "施設";
   else if (findKeywords(destinationText, HOME).length) destinationType = "自宅";
-  else if (/(病院|クリニック|医院|診療所)/.test(destinationText) || DEPT.some(function(department) { return destinationText.includes(department); })) destinationType = "病院・医院";
+  else if (/(病院|クリニック|医院|診療所|医療センター|がんセンター|リハビリテーション)/.test(destinationText) || DEPT.some(function(department) { return destinationText.includes(department); })) destinationType = "病院・医院";
   const aid = findPositiveKeywords(base, AID);
   const aidType = findPositiveKeywords(base, AID_TYPE);
-  const tripType = findKeywords(all, ROUND).length ? "往復" : (findKeywords(all, ONEWAY).length ? "片道" : null);
+  // 「行きだけ」「帰りだけ」は片道。片道系キーワードを優先判定。
+  // 「帰りは○○」は文脈で判定: 「帰りは家族が来る/結構」=片道、「帰りは16時にお迎え」=往復
+  let tripType = null;
+  if (findKeywords(all, ONEWAY).length) tripType = "片道";
+  else if (/(?:帰り|お帰り)は[^。\n]{0,15}(?:結構|不要|いりません|いらない|自分で|(?:家族|主人|夫|妻|旦那|息子|娘)[^。\n]{0,10}(?:来る|来て|来ます|迎え))/.test(all)) tripType = "片道";
+  else if (findKeywords(all, ROUND).length) tripType = "往復";
+  else if (/(?:帰り|お帰り)は?[^。\n]{0,15}(?:\d{1,2}\s*時|お迎え|乗せ|お願い)/.test(all)) tripType = "往復";
+  // 病院名: 固有名(「中央病院」)を全文から収集し最長を採用。裸の「病院」は採用しない
+  const namedMedical = findNamedMedical(all);
   let hospitalSource = null;
-  [dropoff, pickup, base].some(function(candidate) {
-    if (!candidate) return false;
-    const medical = /(病院|クリニック|医院|診療所)/.test(candidate) || DEPT.some(function(department) { return candidate.includes(department); });
-    if (!medical) return false;
-    if (candidate === dropoff || candidate === pickup) hospitalSource = candidate;
-    else {
-      const match = candidate.match(/([一-龯ぁ-んァ-ヶA-Za-z0-9ー]{1,18}(?:病院|クリニック|医院|診療所|整形外科|内科|外科))/);
-      hospitalSource = match ? match[1] : candidate;
-    }
-    return true;
-  });
+  if (namedMedical.length) {
+    hospitalSource = namedMedical.reduce(function(best, candidate) { return candidate.length > best.length ? candidate : best; });
+  } else {
+    [dropoff, pickup].some(function(candidate) {
+      if (!candidate) return false;
+      const medical = /(病院|クリニック|医院|診療所)/.test(candidate) || DEPT.some(function(department) { return candidate.includes(department); });
+      if (!medical) return false;
+      hospitalSource = candidate;
+      return true;
+    });
+  }
   let departments = DEPT.filter(function(department) { return base.includes(department); });
   departments = departments.filter(function(department) { return !departments.some(function(other) { return other !== department && other.includes(department); }); });
   departments = departments.filter(function(department) { return !hospitalSource || !hospitalSource.includes(department); });
@@ -520,31 +651,27 @@ function extract(segments, baseDate) {
   const money = all.match(/(\d{1,3}(?:,\d{3})*|\d+)\s*円/);
   const negativeCompanion = /(?:付き添い|付添|同乗)[^。\n]{0,12}(?:なし|いない|不要)|(?:一人|ひとり)で/.test(base);
   const companionMatch = all.match(/(付き添い|付添|同乗|一緒に)[^。\n]{0,12}?(\d{1,2})\s*(?:名|人)/);
+  const companionBeforeMatch = all.match(/(\d{1,2})\s*(?:名|人)[^。\n]{0,8}?(?:同乗|付き添い|付添|一緒)/); // 「1名同乗されます」語順
   let companions = null;
   if (negativeCompanion) companions = "なし";
   else if (companionMatch) companions = companionMatch[1] + " " + companionMatch[2] + "名";
+  else if (companionBeforeMatch) companions = "同乗 " + companionBeforeMatch[1] + "名";
   else if (findPositiveKeywords(base, ["付き添い", "付添", "同乗", "一緒に"]).length) companions = "あり（人数未確認）";
+  // 氏名の優先順位: ①「〜と申します」 ②担当者の最終復唱「〇〇様」 ③文頭の「〇〇です」名乗り ④「〇〇さん」(第三者依頼)
   const explicitNamePattern = /([一-龯ァ-ヶ]{2,8})\s*(?:と申します|と言います|といいます|と申し)/;
-  const conversationalNamePattern = /(?:^|[。\n])\s*([一-龯ァ-ヶ]{2,8})\s*です(?:けれども|けど|が)?/;
-  // 担当者の復唱「〇〇様」/ 第三者依頼の「〇〇さん」からの氏名候補（一般語は除外）
-  const staff = segments.filter(function(segment) { return segment.role === "staff"; }).map(function(segment) { return segment.text; }).join("\n");
-  const NOT_NAME_WORDS = ["利用者", "患者", "お客", "皆", "本人", "家族", "奥", "旦那", "お母", "お父", "母親", "父親", "先生", "看護", "師長", "神", "お疲れ", "御中", "みな"];
-  function nameCandidate(pattern, text) {
-    const globalPattern = new RegExp(pattern.source, "g");
-    let match;
-    while ((match = globalPattern.exec(text)) !== null) {
-      const candidate = match[1];
-      if (!NOT_NAME_WORDS.some(function(word) { return candidate.includes(word); })) return candidate;
-    }
-    return null;
-  }
-  const nameMatch = customer.match(explicitNamePattern) || customer.match(conversationalNamePattern) || all.match(explicitNamePattern);
-  const customerName = (nameMatch ? nameMatch[1] : null)
-    || nameCandidate(/([一-龯ぁ-んァ-ヶA-Za-z]{1,8})\s*(?:様|さま)/, staff || all)
-    || nameCandidate(/([一-龯ぁ-んァ-ヶ]{2,8})\s*さん/, base);
+  const conversationalNamePattern = /(?:^|[。\n])\s*([一-龯ァ-ヶ]{2,8})\s*です/;
+  // 顧客発話のみを対象にする。全文フォールバックは担当者の応対定型句
+  // 「受付の〇〇と申します」を顧客名と誤採用するため行わない
+  const explicitName = customer.match(explicitNamePattern);
+  const conversationalMatch = customer.match(conversationalNamePattern);
+  const conversationalName = (conversationalMatch && isNameCandidate(conversationalMatch[1])) ? conversationalMatch[1] : null;
+  const customerName = (explicitName ? explicitName[1] : null)
+    || lastHonorificCandidate(staffText)
+    || conversationalName
+    || firstSanCandidate(base);
   return {
     customer_name: customerName,
-    phone: phoneRaw ? phoneRaw.replace(/\s/g, "").replace(/ー/g, "-").replace(/の/g, "-") : null,
+    phone: phoneRaw ? phoneRaw.replace(/\s/g, "").replace(/[ーの、]/g, "-") : null,
     ride_date: rideDateValue,
     ride_time: normalizeTime(timeRaw),
     pickup: pickup,
