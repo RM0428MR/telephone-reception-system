@@ -1,0 +1,1142 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#173b67">
+<title>介護タクシー受付メモ</title>
+<style>
+  :root {
+    --navy: #173b67;
+    --blue: #1768ac;
+    --blue-dark: #0f4f87;
+    --blue-soft: #e8f2fb;
+    --ink: #152033;
+    --muted: #4b5563;
+    --line: #cbd5e1;
+    --surface: #ffffff;
+    --background: #f3f6fa;
+    --success: #176b45;
+    --success-soft: #e3f5eb;
+    --warning: #8a4b08;
+    --warning-soft: #fff4d6;
+    --danger: #a32626;
+    --danger-soft: #fdeaea;
+    --focus: #ffbf47;
+    --shadow: 0 8px 28px rgba(23, 59, 103, 0.09);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    min-height: 100vh;
+    margin: 0;
+    background: var(--background);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  button, input, select, textarea { font: inherit; }
+  button, input, select { min-height: 44px; }
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-weight: 700;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { cursor: not-allowed; opacity: 0.5; }
+  button.primary { background: var(--blue); color: #fff; }
+  button.primary:hover:not(:disabled) { background: var(--blue-dark); }
+  button.secondary { border-color: #9db4cb; background: #fff; color: var(--navy); }
+  button.secondary:hover:not(:disabled) { background: var(--blue-soft); }
+  button.ghost { border-color: var(--line); background: #f8fafc; color: var(--ink); }
+  button.danger { border-color: #e7b4b4; background: #fff; color: var(--danger); }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 100;
+    transform: translateY(-150%);
+    border-radius: 8px;
+    background: #111827;
+    color: #fff;
+    padding: 0.75rem 1rem;
+  }
+  .skip-link:focus { transform: translateY(0); }
+  .app-header {
+    background: linear-gradient(135deg, var(--navy), #225f99);
+    color: #fff;
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 1.4rem max(1rem, env(safe-area-inset-left));
+  }
+  .header-inner, main { width: min(100%, 920px); margin: 0 auto; }
+  h1, h2, h3, p { margin-top: 0; }
+  h1 { margin-bottom: 0.35rem; font-size: clamp(1.45rem, 5vw, 2rem); line-height: 1.25; }
+  h2 { color: var(--navy); font-size: clamp(1.2rem, 4vw, 1.5rem); line-height: 1.3; }
+  h3 { color: var(--navy); font-size: 1.05rem; }
+  .header-note { max-width: 54rem; margin-bottom: 0; color: #edf6ff; font-size: 0.94rem; }
+  main { padding: 1rem max(1rem, env(safe-area-inset-right)) 5.5rem max(1rem, env(safe-area-inset-left)); }
+  .workflow {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+  }
+  .workflow li {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--muted);
+    padding: 0.55rem 0.4rem;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+  .workflow li.current { border-color: var(--blue); background: var(--blue); color: #fff; }
+  .workflow li.complete { border-color: #76ad91; background: var(--success-soft); color: var(--success); }
+  .panel {
+    margin-bottom: 1rem;
+    border: 1px solid #d9e1ea;
+    border-radius: 16px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    padding: clamp(1rem, 4vw, 1.5rem);
+  }
+  .panel-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
+  .panel-heading h2, .panel-heading p { margin-bottom: 0; }
+  .helper, small { color: var(--muted); font-size: 0.9rem; }
+  .privacy-note { border-left: 4px solid #75a7d1; background: var(--blue-soft); padding: 0.75rem 0.85rem; color: #243d58; font-size: 0.9rem; }
+  label, legend { color: #24364c; font-weight: 700; }
+  label { display: block; margin-bottom: 0.35rem; }
+  input, select, textarea { width: 100%; border: 1px solid #9eacbc; border-radius: 10px; background: #fff; color: var(--ink); padding: 0.7rem 0.75rem; }
+  textarea { min-height: 7rem; resize: vertical; }
+  #transcript-input { min-height: 11rem; }
+  input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--warning); box-shadow: 0 0 0 2px rgba(138, 75, 8, 0.15); }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 1rem; }
+  .actions > button { flex: 1 1 11rem; }
+  .review-progress { border: 1px solid #e0b15c; border-radius: 12px; background: var(--warning-soft); color: #633506; padding: 0.8rem 0.9rem; font-weight: 700; }
+  .review-progress.complete { border-color: #80b99b; background: var(--success-soft); color: var(--success); }
+  .missing-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.6rem 0 0; padding: 0; list-style: none; }
+  .missing-list li { border-radius: 999px; background: #fff; padding: 0.25rem 0.6rem; font-size: 0.85rem; }
+  fieldset { min-width: 0; margin: 1rem 0; border: 1px solid var(--line); border-radius: 14px; padding: 1rem; }
+  legend { padding: 0 0.4rem; color: var(--navy); font-size: 1.05rem; }
+  .field-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+  .field { min-width: 0; border-radius: 10px; }
+  .field.needs-review { background: var(--warning-soft); padding: 0.65rem; }
+  .required-mark { color: var(--warning); font-size: 0.82rem; font-weight: 700; }
+  .field-hint { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.85rem; }
+  .summary-card { border-radius: 14px; background: #f1f6fb; padding: 1rem; }
+  pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; line-height: 1.6; }
+  details { margin: 1rem 0; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 0.75rem; }
+  summary { cursor: pointer; color: var(--navy); font-weight: 700; }
+  .confirmation-note { margin-top: 1rem; border: 1px solid #e0b15c; border-radius: 12px; background: var(--warning-soft); padding: 0.85rem; }
+  .validation-message { min-height: 1.5rem; margin: 0.75rem 0 0; color: var(--warning); font-weight: 700; }
+  .sticky-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    margin: 1rem -1rem -1rem;
+    border-top: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.97);
+    padding: 0.85rem 1rem max(0.85rem, env(safe-area-inset-bottom));
+    backdrop-filter: blur(10px);
+  }
+  .history-tools { display: grid; grid-template-columns: 1fr; gap: 0.8rem; margin: 1rem 0; }
+  .history-meta { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; justify-content: space-between; }
+  .history-list { display: grid; gap: 0.85rem; }
+  .history-card { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 1rem; }
+  .history-card h3 { margin: 0.6rem 0 0.25rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .badge { display: inline-flex; align-items: center; min-height: 28px; border-radius: 999px; padding: 0.2rem 0.6rem; background: var(--warning-soft); color: #633506; font-size: 0.78rem; font-weight: 800; }
+  .badge.confirmed { background: var(--success-soft); color: var(--success); }
+  .badge.calendar { background: var(--blue-soft); color: var(--blue-dark); }
+  .route { margin: 0.5rem 0; color: #2f4156; }
+  .empty-state { border: 1px dashed #9eacbc; border-radius: 12px; padding: 1.5rem 1rem; color: var(--muted); text-align: center; }
+  .storage-problem { border: 2px solid #c84a4a; border-radius: 12px; background: var(--danger-soft); color: #701b1b; padding: 1rem; }
+  .detail-fields { display: grid; grid-template-columns: minmax(7rem, auto) 1fr; gap: 0.45rem 0.8rem; }
+  .detail-fields dt { color: var(--muted); font-weight: 700; }
+  .detail-fields dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+  .toast {
+    position: fixed;
+    right: max(1rem, env(safe-area-inset-right));
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    left: max(1rem, env(safe-area-inset-left));
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: min(calc(100% - 2rem), 540px);
+    margin-left: auto;
+    border-radius: 12px;
+    background: #13243a;
+    color: #fff;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    padding: 0.8rem 0.9rem;
+  }
+  .toast.error { background: #7b2020; }
+  .toast button { flex: 0 0 auto; border-color: #fff; color: #fff; background: transparent; }
+  [hidden] { display: none !important; }
+  @media (min-width: 720px) {
+    main { padding-top: 1.5rem; }
+    .workflow li { font-size: 0.92rem; }
+    .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .field.span-2 { grid-column: 1 / -1; }
+    .history-tools { grid-template-columns: minmax(0, 2fr) minmax(12rem, 1fr); }
+    .toast { left: auto; }
+    .sticky-actions { margin-right: -1.5rem; margin-left: -1.5rem; padding-right: 1.5rem; padding-left: 1.5rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    button { transition: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">本文へ移動</a>
+<header class="app-header">
+  <div class="header-inner">
+    <h1>介護タクシー 受付メモ</h1>
+    <p class="header-note">通話後の文字起こしを整理し、担当者が確認してから保存するための端末内アプリです。</p>
+  </div>
+</header>
+<main id="main">
+  <ol class="workflow" aria-label="受付の進行状況">
+    <li data-step="1" class="current" aria-current="step">1. 入力</li>
+    <li data-step="2">2. 確認</li>
+    <li data-step="3">3. 保存</li>
+  </ol>
+  <p class="privacy-note">氏名・電話番号・病院名などの個人情報は、このブラウザの端末内ストレージに保存されます。共有端末では使用せず、定期的にCSVバックアップを取得してください。</p>
+  <section id="import-section" class="panel" aria-labelledby="import-title">
+    <div class="panel-heading"><div>
+      <h2 id="import-title">1. 文字起こしを入力</h2>
+      <p class="helper">メモの「文字起こしをコピー」から得た、「あなた／参加者」付きテキストを貼り付けます。</p>
+    </div></div>
+    <label for="transcript-input">通話の文字起こし</label>
+    <textarea id="transcript-input" autocomplete="off" spellcheck="true" placeholder="あなた&#10;はい、介護タクシーです。&#10;&#10;参加者&#10;予約をお願いします。" aria-describedby="transcript-hint"></textarea>
+    <p id="transcript-hint" class="field-hint">解析後も原文を残し、確認画面で抽出結果と照合できます。</p>
+    <div class="actions">
+      <button id="paste-button" class="secondary" type="button">クリップボードから貼り付け</button>
+      <button id="analyze-button" class="primary" type="button">解析して確認へ</button>
+      <button id="clear-input-button" class="ghost" type="button">入力をクリア</button>
+    </div>
+  </section>
+  <section id="editor" class="panel" aria-labelledby="editor-title" hidden>
+    <div class="panel-heading"><div>
+      <h2 id="editor-title" tabindex="-1">2. 抽出結果を確認・修正</h2>
+      <p class="helper">黄色の項目は未確認です。原文と照合してから確定してください。</p>
+    </div></div>
+    <div id="review-progress" class="review-progress" role="status" aria-live="polite"></div>
+    <form id="reception-form" novalidate>
+      <div id="fields"></div>
+      <details>
+        <summary>文字起こし全文と原文を照合する</summary>
+        <h3>話者整理後</h3><pre id="editor-transcript"></pre>
+        <h3>貼り付けた原文</h3><pre id="editor-raw"></pre>
+      </details>
+      <section class="summary-card" aria-labelledby="summary-title">
+        <h3 id="summary-title">3. 最終確認用の要約</h3>
+        <pre id="summary"></pre>
+      </section>
+      <div id="confirmation-note-wrap" class="confirmation-note" hidden>
+        <label for="confirmation-note">未確認のまま確定する理由</label>
+        <textarea id="confirmation-note" placeholder="例: 電話番号は折り返し時に確認予定" aria-describedby="confirmation-note-hint"></textarea>
+        <p id="confirmation-note-hint" class="field-hint">主要項目が不足した状態で「確認済」にする場合は必須です。</p>
+      </div>
+      <p id="validation-message" class="validation-message" role="alert"></p>
+      <div class="actions sticky-actions">
+        <button id="save-draft-button" class="secondary" type="button">下書き保存</button>
+        <button id="confirm-button" class="primary" type="button">確認済として保存</button>
+        <button id="calendar-button" class="secondary" type="button">確定してカレンダー作成</button>
+        <button id="cancel-edit-button" class="ghost" type="button">編集をやめる</button>
+      </div>
+    </form>
+  </section>
+  <section id="history-section" class="panel" aria-labelledby="history-title">
+    <div class="panel-heading">
+      <div><h2 id="history-title" tabindex="-1">受付履歴</h2><p id="backup-status" class="helper"></p></div>
+      <button id="export-button" class="secondary" type="button">CSVバックアップ</button>
+    </div>
+    <div id="storage-problem" class="storage-problem" role="alert" hidden>
+      <h3>保存データを読み込めません</h3>
+      <p id="storage-problem-message"></p>
+      <div class="actions">
+        <button id="recovery-download-button" class="secondary" type="button">破損データを退避</button>
+        <button id="recovery-reset-button" class="danger" type="button" disabled>退避後、空の履歴で再開</button>
+      </div>
+    </div>
+    <div class="history-tools">
+      <div><label for="history-search">履歴を検索</label><input id="history-search" type="search" inputmode="search" placeholder="氏名・電話・日付・乗降地・全文"></div>
+      <div><label for="status-filter">状態で絞り込み</label><select id="status-filter"><option value="all">すべて</option><option value="draft">下書き</option><option value="confirmed">確認済</option></select></div>
+    </div>
+    <div class="history-meta"><p id="history-count" class="helper" role="status" aria-live="polite"></p></div>
+    <div id="history" class="history-list"></div>
+  </section>
+  <section id="detail-section" class="panel" aria-labelledby="detail-title" hidden>
+    <div class="panel-heading">
+      <div><h2 id="detail-title" tabindex="-1">受付詳細</h2><p class="helper">保存済みの要点と通話全文を照合できます。</p></div>
+      <button id="close-detail-button" class="ghost" type="button">詳細を閉じる</button>
+    </div>
+    <div id="detail-content"></div>
+    <div class="actions">
+      <button id="edit-detail-button" class="secondary" type="button">この受付を編集</button>
+      <button id="delete-detail-button" class="danger" type="button">この受付を削除</button>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast" role="status" aria-live="assertive" hidden>
+  <span id="toast-message"></span>
+  <button id="undo-button" type="button" hidden>元に戻す</button>
+</div>
+<script>
+const FIELD_GROUPS = [
+  { key: "customer", label: "お客様" },
+  { key: "schedule", label: "予約日時" },
+  { key: "route", label: "送迎経路" },
+  { key: "care", label: "介助・同乗" },
+  { key: "extra", label: "補足" }
+];
+const FIELDS = [
+  { key: "customer_name", label: "氏名", group: "customer", type: "text", autocomplete: "name", required: true, placeholder: "例: 山田 花子" },
+  { key: "phone", label: "電話番号", group: "customer", type: "tel", autocomplete: "tel", inputmode: "tel", required: true, placeholder: "例: 090-1234-5678" },
+  { key: "ride_date", label: "希望日", group: "schedule", type: "date", required: true },
+  { key: "ride_time", label: "希望時刻", group: "schedule", type: "time", required: true },
+  { key: "pickup", label: "乗車地", group: "route", type: "text", required: true, placeholder: "例: 自宅" },
+  { key: "dropoff", label: "降車地", group: "route", type: "text", required: true, placeholder: "例: ○○病院" },
+  { key: "destination_type", label: "降車先区分", group: "route", type: "select", options: [["", "選択してください"], ["施設", "施設"], ["自宅", "自宅"], ["病院・医院", "病院・医院"], ["その他", "その他"]] },
+  { key: "trip_type", label: "片道・往復", group: "route", type: "select", required: true, options: [["", "選択してください"], ["片道", "片道"], ["往復", "往復"]] },
+  { key: "aid", label: "介助条件", group: "care", type: "text", required: true, placeholder: "例: 車いす・階段 / なし", hint: "介助不要の場合も「なし」と入力してください。" },
+  { key: "aid_type", label: "車いす・ストレッチャー種別", group: "care", type: "text", placeholder: "例: リクライニング車いす" },
+  { key: "companions", label: "同乗者・付添", group: "care", type: "text", placeholder: "例: 娘 1名 / なし" },
+  { key: "hospital", label: "病院名・診療科", group: "extra", type: "text", placeholder: "例: ○○病院 整形外科" },
+  { key: "fare_memo", label: "概算料金メモ", group: "extra", type: "text", inputmode: "decimal", placeholder: "例: 約3,000円" },
+  { key: "notes", label: "備考", group: "extra", type: "textarea", span: 2, placeholder: "未確定事項や引き継ぎ内容" }
+];
+const CORE_FIELDS = FIELDS.filter(function(field) { return field.required; }).map(function(field) { return field.key; });
+const KEY = "caretaxi_receptions";
+const BACKUP_KEY = "caretaxi_last_backup";
+const AID = ["車いす", "車椅子", "ストレッチャー", "歩行器", "杖", "手すり", "リクライニング", "酸素", "寝台", "階段"];
+const AID_TYPE = ["車いす", "車椅子", "ストレッチャー", "リクライニング", "歩行器", "杖", "寝台"];
+const ROUND = ["往復", "帰りも", "待機", "お迎えも", "行き帰り"];
+const ONEWAY = ["片道"];
+const PLACES = ["病院", "クリニック", "医院", "診療所", "センター", "施設", "自宅", "デイサービス", "老健", "特養", "ホーム", "駅", "整形外科", "内科"];
+const FACILITY = ["施設", "老健", "特養", "ホーム", "デイサービス", "デイ", "グループホーム"];
+const HOME = ["自宅", "家", "うち"];
+const DEPT = ["内科", "外科", "整形外科", "整形", "眼科", "皮膚科", "泌尿器科", "循環器", "呼吸器", "脳神経", "透析", "リハビリ", "歯科", "耳鼻"];
+const ROUTE_SPLIT = /から|まで|、|。|\s|を|に|は|が|で|も|へ/;
+let records = [];
+let current = null;
+let initialEditorSnapshot = "";
+let storageProblem = null;
+let selectedDetailId = null;
+let undoAction = null;
+let toastTimer = null;
+let recoveryDownloaded = false;
+
+function byId(id) { return document.getElementById(id); }
+function clearNode(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+function appendText(parent, tag, text, className) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  node.textContent = text;
+  parent.appendChild(node);
+  return node;
+}
+function deepCopy(value) { return JSON.parse(JSON.stringify(value)); }
+function pad(number) { return String(number).padStart(2, "0"); }
+function localISODate(date) { return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()); }
+function validISODate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3]);
+}
+function validTime(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+  return Boolean(match && Number(match[1]) <= 23 && Number(match[2]) <= 59);
+}
+function normalizeDate(value, baseDate) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (validISODate(raw)) return raw;
+  const base = baseDate ? new Date(baseDate) : new Date();
+  base.setHours(0, 0, 0, 0);
+  let target = null;
+  const explicit = raw.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  if (explicit) {
+    let year = base.getFullYear();
+    target = new Date(year, Number(explicit[1]) - 1, Number(explicit[2]));
+    if (target < base) target = new Date(year + 1, Number(explicit[1]) - 1, Number(explicit[2]));
+    return localISODate(target);
+  }
+  if (/明後日|あさって/.test(raw)) { target = new Date(base); target.setDate(target.getDate() + 2); return localISODate(target); }
+  if (/明日|あした/.test(raw)) { target = new Date(base); target.setDate(target.getDate() + 1); return localISODate(target); }
+  if (/今日|本日/.test(raw)) return localISODate(base);
+  const weekday = raw.match(/([月火水木金土日])\s*曜/);
+  if (weekday) {
+    const weekdayIndex = "月火水木金土日".indexOf(weekday[1]);
+    const monday = new Date(base);
+    const currentMondayOffset = (base.getDay() + 6) % 7;
+    monday.setDate(base.getDate() - currentMondayOffset);
+    const weekOffset = /再来週/.test(raw) ? 14 : (/来週/.test(raw) ? 7 : 0);
+    target = new Date(monday);
+    target.setDate(monday.getDate() + weekOffset + weekdayIndex);
+    if (!/今週|来週|再来週/.test(raw) && target < base) target.setDate(target.getDate() + 7);
+    return localISODate(target);
+  }
+  return null;
+}
+function normalizeTime(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const colon = raw.match(/(\d{1,2})\s*[:：]\s*(\d{2})/);
+  if (colon) {
+    const hour = Number(colon[1]);
+    const minute = Number(colon[2]);
+    if (hour <= 23 && minute <= 59) return pad(hour) + ":" + pad(minute);
+  }
+  const japanese = raw.match(/(午前|午後)?\s*(\d{1,2})\s*時\s*(半|\d{1,2}\s*分)?/);
+  if (!japanese) return null;
+  let hour = Number(japanese[2]);
+  let minute = 0;
+  if (japanese[3] && /半/.test(japanese[3])) minute = 30;
+  else if (japanese[3]) minute = Number((japanese[3].match(/\d+/) || ["0"])[0]);
+  if (japanese[1] === "午後" && hour < 12) hour += 12;
+  if (japanese[1] === "午前" && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+  return pad(hour) + ":" + pad(minute);
+}
+function parseTranscript(raw) {
+  const labels = { "あなた": "staff", "参加者": "customer" };
+  const segments = [];
+  let currentLabel = null;
+  let buffer = [];
+  function flush() {
+    if (currentLabel !== null && buffer.length) segments.push({ label: currentLabel, role: labels[currentLabel] || "unknown", text: buffer.join(" ").trim() });
+  }
+  String(raw || "").split("\n").forEach(function(line) {
+    const value = line.trim();
+    if (Object.prototype.hasOwnProperty.call(labels, value)) { flush(); currentLabel = value; buffer = []; }
+    else if (value) { if (currentLabel === null) currentLabel = "不明"; buffer.push(value); }
+  });
+  flush();
+  return segments;
+}
+function findKeywords(text, values) {
+  const output = [];
+  values.forEach(function(value) { if (text.includes(value) && !output.includes(value)) output.push(value); });
+  return output;
+}
+function escapeRegExp(value) {
+  const special = "\\^$.*+?()[]{}|";
+  return value.split("").map(function(character) { return special.includes(character) ? "\\" + character : character; }).join("");
+}
+function keywordIsPositive(text, keyword) {
+  let offset = 0;
+  while (offset < text.length) {
+    const index = text.indexOf(keyword, offset);
+    if (index < 0) break;
+    const context = text.slice(Math.max(0, index - 5), index + keyword.length + 14);
+    const after = new RegExp(escapeRegExp(keyword) + "[^。\\n]{0,10}(?:なし|ない|いない|いません|不要)");
+    const before = new RegExp("(?:なし|ない|不要)[^。\\n]{0,5}" + escapeRegExp(keyword));
+    if (!after.test(context) && !before.test(context)) return true;
+    offset = index + keyword.length;
+  }
+  return false;
+}
+function findPositiveKeywords(text, values) { return values.filter(function(value) { return keywordIsPositive(text, value); }); }
+function phraseBefore(text, particles) {
+  let best = null;
+  particles.forEach(function(particle) {
+    const index = text.indexOf(particle);
+    if (index > 0) {
+      const fragment = text.slice(Math.max(0, index - 18), index);
+      const parts = fragment.split(ROUTE_SPLIT);
+      const token = parts[parts.length - 1].trim();
+      if (token && (best === null || index < best[0])) best = [index, token];
+    }
+  });
+  return best ? best[1] : null;
+}
+function firstMatch(regexp, text) { const match = text.match(regexp); return match ? match[0].trim() : null; }
+function extract(segments, baseDate) {
+  const customer = segments.filter(function(segment) { return segment.role === "customer"; }).map(function(segment) { return segment.text; }).join("\n");
+  const all = segments.map(function(segment) { return segment.text; }).join("\n");
+  const base = customer || all;
+  const phoneRaw = firstMatch(/0\d{1,3}[-ー\s]?\d{2,4}[-ー\s]?\d{3,4}/, all);
+  const dateParts = [];
+  const explicitDate = all.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  if (explicitDate) dateParts.push(explicitDate[0]);
+  const relativeDate = all.match(/(今日|本日|明日|あした|明後日|あさって|今週|来週|再来週)/);
+  if (relativeDate) dateParts.push(relativeDate[0]);
+  const weekday = all.match(/([月火水木金土日])\s*曜/);
+  if (weekday) dateParts.push(weekday[1] + "曜");
+  const rideDateValue = normalizeDate(dateParts.join(" "), baseDate);
+  const timeRaw = firstMatch(/(\d{1,2})\s*[:：]\s*(\d{2})/, all) || firstMatch(/(午前|午後)?\s*(\d{1,2})\s*時\s*(半|\d{1,2}\s*分)?/, all);
+  let pickup = phraseBefore(base, ["から"]);
+  let dropoff = phraseBefore(base, ["まで", "へ"]);
+  if (!pickup || !dropoff) {
+    const orderedPlaces = PLACES.filter(function(place) { return base.includes(place); }).sort(function(a, b) { return base.indexOf(a) - base.indexOf(b); });
+    if (!pickup && orderedPlaces[0]) pickup = orderedPlaces[0];
+    if (!dropoff && orderedPlaces[1]) dropoff = orderedPlaces[1];
+  }
+  const destinationText = dropoff || "";
+  let destinationType = null;
+  if (findKeywords(destinationText, FACILITY).length) destinationType = "施設";
+  else if (findKeywords(destinationText, HOME).length) destinationType = "自宅";
+  else if (/(病院|クリニック|医院|診療所)/.test(destinationText) || DEPT.some(function(department) { return destinationText.includes(department); })) destinationType = "病院・医院";
+  const aid = findPositiveKeywords(base, AID);
+  const aidType = findPositiveKeywords(base, AID_TYPE);
+  const tripType = findKeywords(all, ROUND).length ? "往復" : (findKeywords(all, ONEWAY).length ? "片道" : null);
+  let hospitalSource = null;
+  [dropoff, pickup, base].some(function(candidate) {
+    if (!candidate) return false;
+    const medical = /(病院|クリニック|医院|診療所)/.test(candidate) || DEPT.some(function(department) { return candidate.includes(department); });
+    if (!medical) return false;
+    if (candidate === dropoff || candidate === pickup) hospitalSource = candidate;
+    else {
+      const match = candidate.match(/([一-龯ぁ-んァ-ヶA-Za-z0-9ー]{1,18}(?:病院|クリニック|医院|診療所|整形外科|内科|外科))/);
+      hospitalSource = match ? match[1] : candidate;
+    }
+    return true;
+  });
+  let departments = DEPT.filter(function(department) { return base.includes(department); });
+  departments = departments.filter(function(department) { return !departments.some(function(other) { return other !== department && other.includes(department); }); });
+  departments = departments.filter(function(department) { return !hospitalSource || !hospitalSource.includes(department); });
+  const hospitalParts = [hospitalSource].concat(departments).filter(Boolean);
+  const hospital = hospitalParts.length ? Array.from(new Set(hospitalParts)).join(" / ") : null;
+  const money = all.match(/(\d{1,3}(?:,\d{3})*|\d+)\s*円/);
+  const negativeCompanion = /(?:付き添い|付添|同乗)[^。\n]{0,12}(?:なし|いない|不要)|(?:一人|ひとり)で/.test(base);
+  const companionMatch = all.match(/(付き添い|付添|同乗|一緒に)[^。\n]{0,12}?(\d{1,2})\s*(?:名|人)/);
+  let companions = null;
+  if (negativeCompanion) companions = "なし";
+  else if (companionMatch) companions = companionMatch[1] + " " + companionMatch[2] + "名";
+  else if (findPositiveKeywords(base, ["付き添い", "付添", "同乗", "一緒に"]).length) companions = "あり（人数未確認）";
+  const explicitNamePattern = /([一-龯ァ-ヶ]{2,8})\s*(?:と申します|と言います|といいます|と申し)/;
+  const conversationalNamePattern = /(?:^|[。\n])\s*([一-龯ァ-ヶ]{2,8})\s*です(?:けれども|けど|が)/;
+  const nameMatch = customer.match(explicitNamePattern) || customer.match(conversationalNamePattern) || all.match(explicitNamePattern);
+  return {
+    customer_name: nameMatch ? nameMatch[1] : null,
+    phone: phoneRaw ? phoneRaw.replace(/\s/g, "").replace(/ー/g, "-") : null,
+    ride_date: rideDateValue,
+    ride_time: normalizeTime(timeRaw),
+    pickup: pickup,
+    dropoff: dropoff,
+    destination_type: destinationType,
+    aid: aid,
+    aid_type: aidType,
+    companions: companions,
+    trip_type: tripType,
+    hospital: hospital,
+    fare_memo: money ? money[0] : null,
+    notes: null
+  };
+}
+function hasValue(value) { if (Array.isArray(value)) return value.length > 0; return value !== null && value !== undefined && String(value).trim() !== ""; }
+function missingCore(fields) { return CORE_FIELDS.filter(function(key) { return !hasValue(fields[key]); }); }
+function canConfirm(fields, note) { return missingCore(fields).length === 0 || String(note || "").trim().length > 0; }
+function formatDateDisplay(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "未確認";
+  if (!validISODate(raw)) return raw;
+  const parts = raw.split("-");
+  return Number(parts[1]) + "月" + Number(parts[2]) + "日";
+}
+function formatTimeDisplay(value) { const raw = String(value || "").trim(); return raw || "未確認"; }
+function formatValue(value) { if (!hasValue(value)) return "未確認"; if (Array.isArray(value)) return value.join("・"); return String(value); }
+function summarize(fields) {
+  const when = formatDateDisplay(fields.ride_date) + " " + formatTimeDisplay(fields.ride_time);
+  return "【受付】" + formatValue(fields.customer_name) + " 様 / TEL " + formatValue(fields.phone) + "\n" +
+    "日時: " + when + " / " + formatValue(fields.trip_type) + "\n" +
+    "経路: " + formatValue(fields.pickup) + " → " + formatValue(fields.dropoff) + "（降車先: " + formatValue(fields.destination_type) + "）\n" +
+    "介助: " + formatValue(fields.aid) + " / 種別: " + formatValue(fields.aid_type) + "\n" +
+    "同乗: " + formatValue(fields.companions) + " / 病院: " + formatValue(fields.hospital) + "\n" +
+    "料金メモ: " + formatValue(fields.fare_memo) + "\n" +
+    "備考: " + formatValue(fields.notes);
+}
+function rideDate(fields) {
+  const dateValue = normalizeDate(fields.ride_date);
+  const timeValue = normalizeTime(fields.ride_time);
+  if (!dateValue || !timeValue) return null;
+  const dateParts = dateValue.split("-").map(Number);
+  const timeParts = timeValue.split(":").map(Number);
+  const start = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0, 0);
+  if (Number.isNaN(start.getTime())) return null;
+  return start;
+}
+function gcalUrl(fields, summaryText) {
+  const start = rideDate(fields);
+  if (!start) return null;
+  const end = new Date(start.getTime() + 60 * 60000);
+  function calendarDate(value) { return value.getFullYear() + pad(value.getMonth() + 1) + pad(value.getDate()) + "T" + pad(value.getHours()) + pad(value.getMinutes()) + "00"; }
+  const title = "[要確認] 介護タクシー " + formatValue(fields.customer_name) + " 様";
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(title) + "&dates=" + calendarDate(start) + "/" + calendarDate(end) + "&details=" + encodeURIComponent(summaryText);
+}
+function emptyFields() {
+  const fields = {};
+  FIELDS.forEach(function(field) { fields[field.key] = field.key === "aid" || field.key === "aid_type" ? [] : null; });
+  return fields;
+}
+function normalizeRecord(record, index) {
+  const source = record && typeof record === "object" ? record : {};
+  const sourceFields = source.fields && typeof source.fields === "object" ? source.fields : {};
+  const fields = emptyFields();
+  FIELDS.forEach(function(field) {
+    const value = sourceFields[field.key];
+    if (field.key === "aid" || field.key === "aid_type") {
+      if (Array.isArray(value)) fields[field.key] = value.filter(Boolean);
+      else fields[field.key] = hasValue(value) ? String(value).split(/[・,]/).map(function(item) { return item.trim(); }).filter(Boolean) : [];
+    } else fields[field.key] = hasValue(value) ? value : null;
+  });
+  const confirmationNote = source.confirmation_note || "";
+  const normalizedStatus = source.status === "confirmed" && canConfirm(fields, confirmationNote) ? "confirmed" : "draft";
+  return {
+    id: source.id !== undefined && source.id !== null ? source.id : Date.now() + index,
+    created_at: source.created_at || new Date().toISOString(),
+    updated_at: source.updated_at || source.created_at || null,
+    status: normalizedStatus,
+    fields: fields,
+    summary: source.summary || summarize(fields),
+    transcript: source.transcript || "",
+    raw: source.raw || "",
+    confirmation_note: confirmationNote,
+    calendar_state: source.calendar_state === "opened" || source.calendar === true ? "opened" : "not_opened"
+  };
+}
+function safeParseRecords(raw) {
+  if (!raw) return { records: [], error: null, raw: null };
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("保存形式が配列ではありません");
+    return { records: parsed.map(function(record, index) { return normalizeRecord(record, index); }), error: null, raw: raw };
+  } catch (error) { return { records: [], error: error, raw: raw }; }
+}
+function statusLabel(status) { return status === "confirmed" ? "確認済" : "下書き"; }
+function calendarLabel(state) { return state === "opened" ? "カレンダー作成画面を開いた（保存未確認）" : "カレンダー未操作"; }
+function recordSearchText(record) {
+  const values = FIELDS.map(function(field) { const value = record.fields[field.key]; return Array.isArray(value) ? value.join(" ") : String(value || ""); });
+  values.push(record.transcript || "", record.raw || "", record.confirmation_note || "", statusLabel(record.status));
+  return values.join(" ").toLocaleLowerCase("ja");
+}
+function filterRecords(allRecords, query, status) {
+  const needle = String(query || "").trim().toLocaleLowerCase("ja");
+  return allRecords.filter(function(record) {
+    const matchesStatus = status === "all" || record.status === status;
+    const matchesQuery = !needle || recordSearchText(record).includes(needle);
+    return matchesStatus && matchesQuery;
+  });
+}
+function csvCell(value) { return '"' + String(value === null || value === undefined ? "" : value).replace(/"/g, '""') + '"'; }
+function recordsToCSV(allRecords) {
+  const header = ["id", "created_at", "updated_at", "status", "calendar_state", "未確認理由"].concat(FIELDS.map(function(field) { return field.label; }), ["要約", "文字起こし全文", "原文"]);
+  const rows = allRecords.map(function(record) {
+    const fieldValues = FIELDS.map(function(field) { const value = record.fields[field.key]; return Array.isArray(value) ? value.join("・") : (value || ""); });
+    return [record.id, record.created_at, record.updated_at, statusLabel(record.status), calendarLabel(record.calendar_state), record.confirmation_note].concat(fieldValues, [summarize(record.fields), record.transcript, record.raw]);
+  });
+  return [header].concat(rows).map(function(row) { return row.map(csvCell).join(","); }).join("\n");
+}
+function setStep(step) {
+  document.querySelectorAll(".workflow li").forEach(function(item) {
+    const itemStep = Number(item.dataset.step);
+    item.classList.toggle("current", itemStep === step);
+    item.classList.toggle("complete", itemStep < step);
+    if (itemStep === step) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  });
+}
+function showToast(message, undo, isError) {
+  const toast = byId("toast");
+  byId("toast-message").textContent = message;
+  toast.classList.toggle("error", Boolean(isError));
+  toast.setAttribute("role", isError ? "alert" : "status");
+  undoAction = typeof undo === "function" ? undo : null;
+  byId("undo-button").hidden = !undoAction;
+  toast.hidden = false;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(function() { toast.hidden = true; undoAction = null; }, undoAction ? 9000 : 5000);
+}
+function persistRecords(nextRecords) {
+  if (storageProblem) { showToast("破損データを退避するまで、新しい保存は行えません。", null, true); return false; }
+  try { localStorage.setItem(KEY, JSON.stringify(nextRecords)); records = nextRecords; return true; }
+  catch (error) { showToast("端末内への保存に失敗しました。空き容量とSafariの設定を確認してください。", null, true); return false; }
+}
+function renderStorageProblem() {
+  const box = byId("storage-problem");
+  if (!storageProblem) { box.hidden = true; return; }
+  box.hidden = false;
+  byId("recovery-reset-button").disabled = !recoveryDownloaded;
+  byId("storage-problem-message").textContent = "既存データは上書きしていません。先に破損データを退避してください。詳細: " + storageProblem.error.message;
+}
+function renderBackupStatus() {
+  let value = null;
+  try { value = localStorage.getItem(BACKUP_KEY); } catch (error) { value = null; }
+  byId("backup-status").textContent = value ? "最終CSVバックアップ: " + new Date(value).toLocaleString("ja-JP") : "CSVバックアップはまだ取得されていません";
+}
+function downloadText(filename, text, type) {
+  const blob = new Blob(["\ufeff" + text], { type: type || "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(function() { URL.revokeObjectURL(url); }, 0);
+}
+function fieldLabel(key) { const field = FIELDS.find(function(item) { return item.key === key; }); return field ? field.label : key; }
+function createField(field, value) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "field" + (field.span === 2 ? " span-2" : "");
+  wrapper.dataset.field = field.key;
+  const label = document.createElement("label");
+  label.htmlFor = "fld_" + field.key;
+  label.textContent = field.label + " ";
+  if (field.required) {
+    const required = document.createElement("span");
+    required.className = "required-mark";
+    required.textContent = "確認必須";
+    label.appendChild(required);
+  }
+  wrapper.appendChild(label);
+  let control;
+  if (field.type === "select") {
+    control = document.createElement("select");
+    field.options.forEach(function(optionValue) {
+      const option = document.createElement("option");
+      option.value = optionValue[0];
+      option.textContent = optionValue[1];
+      control.appendChild(option);
+    });
+  } else if (field.type === "textarea") control = document.createElement("textarea");
+  else {
+    control = document.createElement("input");
+    let inputType = field.type || "text";
+    const textValue = Array.isArray(value) ? value.join("・") : String(value || "");
+    if (field.type === "date" && textValue && !validISODate(textValue)) inputType = "text";
+    if (field.type === "time" && textValue && !validTime(textValue)) inputType = "text";
+    control.type = inputType;
+  }
+  control.id = "fld_" + field.key;
+  control.name = field.key;
+  if (field.autocomplete) control.autocomplete = field.autocomplete;
+  else control.autocomplete = "off";
+  if (field.inputmode) control.inputMode = field.inputmode;
+  if (field.placeholder) control.placeholder = field.placeholder;
+  control.value = Array.isArray(value) ? value.join("・") : String(value || "");
+  const hintText = field.hint || ((field.type === "date" && control.type === "text") || (field.type === "time" && control.type === "text") ? "旧形式の値です。日付・時刻を選び直すと標準形式になります。" : "");
+  if (hintText) {
+    const hintId = "hint_" + field.key;
+    control.setAttribute("aria-describedby", hintId);
+    const hint = document.createElement("p");
+    hint.id = hintId;
+    hint.className = "field-hint";
+    hint.textContent = hintText;
+    wrapper.appendChild(control);
+    wrapper.appendChild(hint);
+  } else wrapper.appendChild(control);
+  control.addEventListener("input", handleEditorChange);
+  control.addEventListener("change", handleEditorChange);
+  return wrapper;
+}
+function renderFields(fields) {
+  const container = byId("fields");
+  clearNode(container);
+  FIELD_GROUPS.forEach(function(group) {
+    const fieldset = document.createElement("fieldset");
+    const legend = document.createElement("legend");
+    legend.textContent = group.label;
+    fieldset.appendChild(legend);
+    const grid = document.createElement("div");
+    grid.className = "field-grid";
+    FIELDS.filter(function(field) { return field.group === group.key; }).forEach(function(field) { grid.appendChild(createField(field, fields[field.key])); });
+    fieldset.appendChild(grid);
+    container.appendChild(fieldset);
+  });
+}
+function collectFields() {
+  const fields = {};
+  FIELDS.forEach(function(field) {
+    const control = byId("fld_" + field.key);
+    const value = control ? control.value.trim() : "";
+    if (field.key === "aid" || field.key === "aid_type") fields[field.key] = value ? value.split(/[・,]/).map(function(item) { return item.trim(); }).filter(Boolean) : [];
+    else if (field.key === "ride_date") fields[field.key] = control && control.type === "date" ? (validISODate(value) ? value : null) : (value || null);
+    else if (field.key === "ride_time") fields[field.key] = control && control.type === "time" ? (normalizeTime(value) || null) : (value || null);
+    else fields[field.key] = value || null;
+  });
+  return fields;
+}
+function editorSnapshot() { return JSON.stringify({ fields: collectFields(), note: byId("confirmation-note").value }); }
+function editorIsDirty() { if (!current || byId("editor").hidden) return false; return editorSnapshot() !== initialEditorSnapshot; }
+function handleEditorChange() { updateReview(); }
+function updateReview() {
+  if (!current) return;
+  const fields = collectFields();
+  current.fields = fields;
+  const missing = missingCore(fields);
+  const note = byId("confirmation-note").value.trim();
+  const progress = byId("review-progress");
+  clearNode(progress);
+  if (missing.length === 0) {
+    progress.classList.add("complete");
+    appendText(progress, "span", "主要8項目をすべて確認できます。");
+  } else {
+    progress.classList.remove("complete");
+    appendText(progress, "span", "主要8項目のうち " + (CORE_FIELDS.length - missing.length) + "項目を確認できます。未確認: ");
+    const list = document.createElement("ul");
+    list.className = "missing-list";
+    missing.forEach(function(key) { appendText(list, "li", fieldLabel(key)); });
+    progress.appendChild(list);
+  }
+  FIELDS.forEach(function(field) {
+    const control = byId("fld_" + field.key);
+    const wrapper = control ? control.closest(".field") : null;
+    const invalid = field.required && missing.includes(field.key);
+    if (control) control.setAttribute("aria-invalid", invalid ? "true" : "false");
+    if (wrapper) wrapper.classList.toggle("needs-review", invalid);
+  });
+  byId("summary").textContent = summarize(fields);
+  byId("confirmation-note-wrap").hidden = missing.length === 0;
+  const allowed = canConfirm(fields, note);
+  const calendarReady = Boolean(rideDate(fields));
+  const blockedByStorage = Boolean(storageProblem);
+  byId("confirm-button").disabled = !allowed || blockedByStorage;
+  byId("calendar-button").disabled = !allowed || !calendarReady || blockedByStorage;
+  byId("save-draft-button").disabled = blockedByStorage;
+  let validation = "";
+  if (missing.length && !note) validation = "未確認項目を残して確定する場合は、理由を入力してください。";
+  else if (!calendarReady) validation = "カレンダー作成には、希望日と希望時刻の両方が必要です。";
+  byId("validation-message").textContent = validation;
+}
+function openEditor(data) {
+  current = {
+    id: data.id === undefined ? null : data.id,
+    created_at: data.created_at || null,
+    status: data.status || "draft",
+    fields: deepCopy(data.fields || emptyFields()),
+    transcript: data.transcript || "",
+    raw: data.raw || "",
+    confirmation_note: data.confirmation_note || "",
+    calendar_state: data.calendar_state || "not_opened"
+  };
+  renderFields(current.fields);
+  byId("confirmation-note").value = current.confirmation_note;
+  byId("editor-transcript").textContent = current.transcript || "話者整理後の文字起こしはありません";
+  byId("editor-raw").textContent = current.raw || "原文はありません";
+  byId("editor").hidden = false;
+  byId("detail-section").hidden = true;
+  setStep(2);
+  updateReview();
+  initialEditorSnapshot = editorSnapshot();
+  byId("editor-title").focus({ preventScroll: true });
+  byId("editor").scrollIntoView({ behavior: preferredScrollBehavior(), block: "start" });
+}
+function analyzeInput() {
+  const raw = byId("transcript-input").value;
+  if (!raw.trim()) { showToast("文字起こしを貼り付けてください。", null, true); byId("transcript-input").focus(); return; }
+  const segments = parseTranscript(raw);
+  const fields = extract(segments);
+  openEditor({ fields: fields, transcript: segments.map(function(segment) { return segment.label + ": " + segment.text; }).join("\n"), raw: raw, status: "draft" });
+  showToast("抽出しました。黄色の未確認項目を確認してください。");
+}
+async function pasteFromClipboard() {
+  if (!navigator.clipboard || !navigator.clipboard.readText) {
+    showToast("この環境では自動貼り付けを使えません。入力欄を長押しして貼り付けてください。", null, true);
+    byId("transcript-input").focus();
+    return;
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text) throw new Error("クリップボードが空です");
+    byId("transcript-input").value = text;
+    setStep(1);
+    showToast("クリップボードから貼り付けました。");
+  } catch (error) {
+    showToast("自動貼り付けに失敗しました。入力欄を長押しして貼り付けてください。", null, true);
+    byId("transcript-input").focus();
+  }
+}
+function clearInput() {
+  const input = byId("transcript-input");
+  const previous = input.value;
+  if (!previous.trim()) return;
+  if (!window.confirm("貼り付けた文字起こしをクリアしますか？")) return;
+  input.value = "";
+  showToast("文字起こしをクリアしました。", function() { input.value = previous; input.focus(); showToast("文字起こしを元に戻しました。"); });
+}
+function buildRecord(status, calendarState) {
+  const fields = collectFields();
+  const now = new Date().toISOString();
+  return {
+    id: current.id === null ? Date.now() : current.id,
+    created_at: current.created_at || now,
+    updated_at: now,
+    status: status,
+    fields: fields,
+    summary: summarize(fields),
+    transcript: current.transcript,
+    raw: current.raw,
+    confirmation_note: byId("confirmation-note").value.trim(),
+    calendar_state: calendarState || current.calendar_state || "not_opened"
+  };
+}
+function saveCurrent(status, withCalendar) {
+  if (!current) return;
+  const wasNewRecord = current.id === null;
+  const fields = collectFields();
+  const note = byId("confirmation-note").value.trim();
+  if (status === "confirmed" && !canConfirm(fields, note)) {
+    updateReview();
+    showToast("未確認理由を入力してから確定してください。", null, true);
+    byId("confirmation-note").focus();
+    return;
+  }
+  let calendarWindow = null;
+  let calendarState = current.calendar_state || "not_opened";
+  let calendarURL = null;
+  if (withCalendar) {
+    calendarURL = gcalUrl(fields, summarize(fields));
+    if (!calendarURL) { updateReview(); showToast("希望日と希望時刻を確認してからカレンダーを作成してください。", null, true); return; }
+    calendarWindow = window.open("about:blank", "_blank");
+    if (!calendarWindow) { showToast("ポップアップがブロックされました。Safariの設定を確認してください。", null, true); return; }
+    calendarState = "opened";
+  }
+  if (calendarWindow) {
+    try {
+      calendarWindow.opener = null;
+      calendarWindow.location.href = calendarURL;
+    } catch (error) {
+      calendarWindow.close();
+      showToast("カレンダー作成画面を開けませんでした。もう一度お試しください。", null, true);
+      return;
+    }
+  }
+  const record = buildRecord(status, calendarState);
+  const next = records.slice();
+  const existingIndex = next.findIndex(function(item) { return item.id === record.id; });
+  if (existingIndex >= 0) next.splice(existingIndex, 1, record);
+  else next.unshift(record);
+  if (!persistRecords(next)) { if (calendarWindow) calendarWindow.close(); return; }
+  const label = status === "confirmed" ? "確認済として保存しました。" : "下書きを保存しました。";
+  closeEditor(true);
+  if (wasNewRecord) byId("transcript-input").value = "";
+  renderHistory();
+  setStep(3);
+  showToast(withCalendar ? label + " カレンダー作成画面を開きました。保存完了はGoogle側で確認してください。" : label);
+  byId("history-title").focus({ preventScroll: true });
+  byId("history-section").scrollIntoView({ behavior: preferredScrollBehavior(), block: "start" });
+}
+function closeEditor(force) {
+  if (!force && editorIsDirty() && !window.confirm("保存していない修正があります。編集をやめますか？")) return false;
+  current = null;
+  initialEditorSnapshot = "";
+  byId("editor").hidden = true;
+  setStep(1);
+  return true;
+}
+function editRecord(id) { const record = records.find(function(item) { return item.id === id; }); if (record) openEditor(record); }
+function statusBadge(record) {
+  const badge = document.createElement("span");
+  badge.className = "badge" + (record.status === "confirmed" ? " confirmed" : "");
+  badge.textContent = statusLabel(record.status);
+  return badge;
+}
+function calendarBadge(record) {
+  const badge = document.createElement("span");
+  badge.className = "badge calendar";
+  badge.textContent = calendarLabel(record.calendar_state);
+  return badge;
+}
+function renderHistory() {
+  const container = byId("history");
+  clearNode(container);
+  const filtered = filterRecords(records, byId("history-search").value, byId("status-filter").value);
+  byId("history-count").textContent = records.length + "件中 " + filtered.length + "件を表示";
+  if (!filtered.length) {
+    const message = records.length ? "条件に一致する受付はありません。" : "まだ受付がありません。文字起こしを解析して、下書きまたは確認済として保存してください。";
+    appendText(container, "p", message, "empty-state");
+    return;
+  }
+  filtered.forEach(function(record) {
+    const article = document.createElement("article");
+    article.className = "history-card";
+    article.setAttribute("aria-labelledby", "record_" + record.id);
+    const badges = document.createElement("div");
+    badges.className = "badges";
+    badges.appendChild(statusBadge(record));
+    if (record.calendar_state === "opened") badges.appendChild(calendarBadge(record));
+    article.appendChild(badges);
+    const name = formatValue(record.fields.customer_name);
+    const heading = appendText(article, "h3", name + " 様");
+    heading.id = "record_" + record.id;
+    appendText(article, "p", formatDateDisplay(record.fields.ride_date) + " " + formatTimeDisplay(record.fields.ride_time) + " / " + formatValue(record.fields.trip_type), "helper");
+    appendText(article, "p", formatValue(record.fields.pickup) + " → " + formatValue(record.fields.dropoff), "route");
+    appendText(article, "p", "TEL " + formatValue(record.fields.phone), "helper");
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const detailButton = appendText(actions, "button", "詳細・全文を見る", "secondary");
+    detailButton.type = "button";
+    detailButton.setAttribute("aria-label", name + "様 " + formatDateDisplay(record.fields.ride_date) + "の詳細と全文を見る");
+    detailButton.addEventListener("click", function() { openDetail(record.id); });
+    const editButton = appendText(actions, "button", "編集", "ghost");
+    editButton.type = "button";
+    editButton.setAttribute("aria-label", name + "様の受付を編集");
+    editButton.addEventListener("click", function() { editRecord(record.id); });
+    const deleteButton = appendText(actions, "button", "削除", "danger");
+    deleteButton.type = "button";
+    deleteButton.setAttribute("aria-label", name + "様 " + formatDateDisplay(record.fields.ride_date) + "の受付を削除");
+    deleteButton.addEventListener("click", function() { deleteRecord(record.id); });
+    article.appendChild(actions);
+    container.appendChild(article);
+  });
+}
+function renderDetail(record) {
+  const container = byId("detail-content");
+  clearNode(container);
+  const badges = document.createElement("div");
+  badges.className = "badges";
+  badges.appendChild(statusBadge(record));
+  badges.appendChild(calendarBadge(record));
+  container.appendChild(badges);
+  appendText(container, "h3", "受付要約");
+  appendText(container, "pre", summarize(record.fields));
+  appendText(container, "h3", "抽出・補正項目");
+  const list = document.createElement("dl");
+  list.className = "detail-fields";
+  FIELDS.forEach(function(field) { appendText(list, "dt", field.label); appendText(list, "dd", formatValue(record.fields[field.key])); });
+  container.appendChild(list);
+  if (record.confirmation_note) { appendText(container, "h3", "未確認のまま確定した理由"); appendText(container, "p", record.confirmation_note); }
+  const transcriptDetails = document.createElement("details");
+  const transcriptSummary = document.createElement("summary");
+  transcriptSummary.textContent = "文字起こし全文";
+  transcriptDetails.appendChild(transcriptSummary);
+  appendText(transcriptDetails, "pre", record.transcript || "全文は保存されていません");
+  container.appendChild(transcriptDetails);
+  const rawDetails = document.createElement("details");
+  const rawSummary = document.createElement("summary");
+  rawSummary.textContent = "貼り付けた原文";
+  rawDetails.appendChild(rawSummary);
+  appendText(rawDetails, "pre", record.raw || "原文は保存されていません");
+  container.appendChild(rawDetails);
+}
+function openDetail(id) {
+  const record = records.find(function(item) { return item.id === id; });
+  if (!record) return;
+  selectedDetailId = id;
+  renderDetail(record);
+  byId("detail-section").hidden = false;
+  byId("detail-title").focus({ preventScroll: true });
+  byId("detail-section").scrollIntoView({ behavior: preferredScrollBehavior(), block: "start" });
+}
+function closeDetail() { byId("detail-section").hidden = true; selectedDetailId = null; byId("history-title").focus(); }
+function deleteRecord(id) {
+  const index = records.findIndex(function(item) { return item.id === id; });
+  if (index < 0) return;
+  const record = records[index];
+  const name = formatValue(record.fields.customer_name);
+  const date = formatDateDisplay(record.fields.ride_date);
+  if (!window.confirm(name + "様（" + date + "）の受付を削除しますか？ 9秒以内なら元に戻せます。")) return;
+  const next = records.slice();
+  next.splice(index, 1);
+  if (!persistRecords(next)) return;
+  if (selectedDetailId === id) { byId("detail-section").hidden = true; selectedDetailId = null; }
+  renderHistory();
+  showToast(name + "様の受付を削除しました。", function() {
+    const restored = records.slice();
+    restored.splice(Math.min(index, restored.length), 0, record);
+    if (persistRecords(restored)) { renderHistory(); showToast("削除した受付を元に戻しました。"); }
+  });
+}
+function exportCSV() {
+  if (!records.length) { showToast("バックアップする受付履歴がありません。", null, true); return; }
+  downloadText("caretaxi-receptions-" + localISODate(new Date()) + ".csv", recordsToCSV(records), "text/csv;charset=utf-8");
+  try { localStorage.setItem(BACKUP_KEY, new Date().toISOString()); }
+  catch (error) { showToast("CSVは作成しましたが、最終バックアップ日時を保存できませんでした。", null, true); return; }
+  renderBackupStatus();
+  showToast(records.length + "件のCSVバックアップを作成しました。");
+}
+function downloadRecoveryData() {
+  if (!storageProblem || !storageProblem.raw) return;
+  downloadText("caretaxi-corrupted-storage-" + Date.now() + ".txt", storageProblem.raw, "text/plain;charset=utf-8");
+  recoveryDownloaded = true;
+  byId("recovery-reset-button").disabled = false;
+  showToast("破損データをテキストとして退避しました。元データは削除していません。");
+}
+function resetCorruptedStorage() {
+  if (!storageProblem || !recoveryDownloaded) return;
+  if (!window.confirm("退避済みの破損データを端末内ストレージから削除し、空の履歴で再開しますか？ この操作は取り消せません。")) return;
+  try {
+    localStorage.removeItem(KEY);
+  } catch (error) {
+    showToast("破損データを削除できませんでした。Safariの設定を確認してください。", null, true);
+    return;
+  }
+  records = [];
+  storageProblem = null;
+  recoveryDownloaded = false;
+  renderStorageProblem();
+  renderHistory();
+  showToast("空の履歴で再開しました。退避ファイルは安全な場所に保管してください。");
+}
+function initializeStorage() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); }
+  catch (error) { storageProblem = { error: error, raw: null }; records = []; return; }
+  const parsed = safeParseRecords(raw);
+  records = parsed.records;
+  storageProblem = parsed.error ? { error: parsed.error, raw: parsed.raw } : null;
+}
+function preferredScrollBehavior() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+function bindEvents() {
+  byId("analyze-button").addEventListener("click", analyzeInput);
+  byId("paste-button").addEventListener("click", pasteFromClipboard);
+  byId("clear-input-button").addEventListener("click", clearInput);
+  byId("save-draft-button").addEventListener("click", function() { saveCurrent("draft", false); });
+  byId("confirm-button").addEventListener("click", function() { saveCurrent("confirmed", false); });
+  byId("calendar-button").addEventListener("click", function() { saveCurrent("confirmed", true); });
+  byId("cancel-edit-button").addEventListener("click", function() { closeEditor(false); });
+  byId("confirmation-note").addEventListener("input", updateReview);
+  byId("history-search").addEventListener("input", renderHistory);
+  byId("status-filter").addEventListener("change", renderHistory);
+  byId("export-button").addEventListener("click", exportCSV);
+  byId("recovery-download-button").addEventListener("click", downloadRecoveryData);
+  byId("recovery-reset-button").addEventListener("click", resetCorruptedStorage);
+  byId("close-detail-button").addEventListener("click", closeDetail);
+  byId("edit-detail-button").addEventListener("click", function() { if (selectedDetailId !== null) editRecord(selectedDetailId); });
+  byId("delete-detail-button").addEventListener("click", function() { if (selectedDetailId !== null) deleteRecord(selectedDetailId); });
+  byId("undo-button").addEventListener("click", function() {
+    const action = undoAction;
+    undoAction = null;
+    byId("toast").hidden = true;
+    if (action) action();
+  });
+  byId("transcript-input").addEventListener("input", function() { setStep(1); });
+  window.addEventListener("beforeunload", function(event) {
+    if (!editorIsDirty()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
+}
+function init() {
+  initializeStorage();
+  bindEvents();
+  renderStorageProblem();
+  renderBackupStatus();
+  renderHistory();
+  setStep(1);
+}
+if (typeof document !== "undefined") init();
+</script>
+</body>
+</html>
