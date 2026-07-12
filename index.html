@@ -502,8 +502,8 @@ function pickRideTime(text) {
   }
   return best;
 }
-// 注: 「が」は固有名詞に頻出(「旭が丘」「がんセンター」)のため分割しない
-const ROUTE_SPLIT_STRICT = /から|まで|、|。|\s|を|に|は|で|も|へ|様|時|分/;
+// 注: 「が」「は」は固有名詞に頻出(「旭が丘」「がんセンター」「はくほう会」)のため分割しない
+const ROUTE_SPLIT_STRICT = /から|まで|、|。|\s|を|に|で|も|へ|様|時|分/;
 const ROUTE_TOKEN_STOP = ["それ", "これ", "どこ", "ところ", "いつ", "なん"];
 function collectRoutes(text) {
   const pickups = [];
@@ -529,25 +529,47 @@ function collectRoutes(text) {
 // 「けやき台」「やまと台」等の固有名内ひらがな(や/と/が)を切断しないため、
 // 助詞での機械分割はせず、(1)から/まで切断 (2)途中サフィックス切断 (3)先頭junk除去 (4)裸サフィックス棄却 を順に適用。
 const MED_SUFFIXES = ["病院", "クリニック", "医院", "診療所", "がんセンター", "医療センター", "眼科", "整形外科", "内科", "外科", "皮膚科", "歯科", "耳鼻科", "産婦人科"];
-function normalizeMedicalName(raw) {
-  let name = raw.split(/から|まで/).pop();
-  // 「病院とやまと台クリニック」→ 先行施設名ごと飲み込んだ場合は後段だけ残す。
-  // 「と|や|が」除去は切断が起きた時のみ（「やまと台クリニック」の頭を削らないため）
-  const afterMidCut = name.replace(/^[\s\S]*?(?:病院|クリニック|医院|診療所|センター)(?=[\s\S])/, "");
-  if (afterMidCut !== name) name = afterMidCut.replace(/^(?:と|や|が|の|に|、|。|\s)+/, "");
-  // 先頭の日時語・助詞を除去（「来週の月曜に病院」→「病院」）
-  name = name.replace(/^(?:来週|今週|再来週|明日|明後日|今日|本日|毎週|朝|お昼|昼|夕方|夜|晩|月曜|火曜|水曜|木曜|金曜|土曜|日曜|[0-9０-９]{1,2}(?:時|分|日|月)?|の|に|は|を|へ|で|、|。|\s)+/, "");
+const MED_SUFFIX_END_RE = /(?:病院|クリニック|医院|診療所|がんセンター|医療センター|眼科|整形外科|内科|外科|皮膚科|歯科|耳鼻科|産婦人科)$/;
+function cleanMedicalPart(part, isAfterSplit) {
+  let name = part.replace(/^[、。\s]+/, "");
+  // 連結助詞の剥がしは「病院とやまと台クリニック」の分割後段のみ。
+  // 単独の「やまと台クリニック」の頭を削らないため、無条件では剥がさない
+  if (isAfterSplit) name = name.replace(/^(?:と|や|が)(?=.)/, "");
+  name = name.replace(/^[\s\S]*?(?:行き先|場所|住所|連絡先|予約)(?:は|が|の|も)?/, ""); // 「行き先は中央病院」→「中央病院」
+  // 先頭の日時語・助詞を除去（「来週の月曜に病院」→「病院」）。「は」は「はくほう会」等のため除去しない
+  name = name.replace(/^(?:来週|今週|再来週|明日|明後日|今日|本日|毎週|朝|お昼|昼|夕方|夜|晩|月曜|火曜|水曜|木曜|金曜|土曜|日曜|[0-9０-９]{1,2}(?:時|分|日|月)?|の|に|を|へ|で|、|。|\s)+/, "");
   if (!name || MED_SUFFIXES.includes(name)) return null; // 裸の「病院」等は固有名ではない
+  if (!MED_SUFFIX_END_RE.test(name)) return null; // 施設語で終わらないものは不採用
   if (/[0-9０-９]|時|分|曜|です|ます/.test(name)) return null; // junk残留は不採用
   return name;
+}
+function normalizeMedicalName(raw) {
+  const results = [];
+  // 「西病院から北リハビリテーション病院」→ から/までの各区間を独立に評価
+  raw.split(/から|まで/).forEach(function(segment) {
+    // 「けやき台病院とやまと台クリニック」→ 完結施設語の直後で分割して両方拾う
+    const parts = [];
+    const splitRe = /(病院|クリニック|医院|診療所|センター)/g;
+    let last = 0;
+    let match;
+    while ((match = splitRe.exec(segment)) !== null) {
+      const end = match.index + match[1].length;
+      if (end < segment.length) { parts.push(segment.slice(last, end)); last = end; }
+    }
+    parts.push(segment.slice(last));
+    parts.forEach(function(part, index) {
+      const name = cleanMedicalPart(part, index > 0);
+      if (name) results.push(name);
+    });
+  });
+  return results;
 }
 function findNamedMedical(text) {
   const namedRe = /(?:^|[のはをにへでもやとが、。！？\s]|から|まで)([一-龯ぁ-んァ-ヶA-Za-z0-9ー]{1,20}(?:病院|クリニック|医院|診療所|がんセンター|医療センター|眼科|整形外科|内科|外科|皮膚科|歯科|耳鼻科|産婦人科))/g;
   const results = [];
   let match;
   while ((match = namedRe.exec(text)) !== null) {
-    const name = normalizeMedicalName(match[1]);
-    if (name) results.push(name);
+    normalizeMedicalName(match[1]).forEach(function(name) { results.push(name); });
   }
   return results;
 }
